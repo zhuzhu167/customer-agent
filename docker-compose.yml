@@ -1,0 +1,110 @@
+name: customer-agent
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: customer_agent
+      POSTGRES_USER: customer_agent
+      POSTGRES_PASSWORD: customer_agent
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U customer_agent -d customer_agent"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: valkey/valkey:8-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  livekit:
+    image: livekit/livekit-server:v1.10
+    command:
+      - "--dev"
+      - "--bind"
+      - "0.0.0.0"
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "7882:7882/udp"
+    environment:
+      LIVEKIT_KEYS: "devkey: secret"
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file:
+      - .env.example
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: "postgresql+psycopg://customer_agent:customer_agent@postgres:5432/customer_agent"
+      REDIS_URL: "redis://redis:6379/0"
+      LIVEKIT_URL: "ws://livekit:7880"
+      PUBLIC_LIVEKIT_URL: "${PUBLIC_LIVEKIT_URL:-ws://127.0.0.1:7880}"
+      VOICE_WORKER_LAUNCH_MODE: "${VOICE_WORKER_LAUNCH_MODE:-in_process}"
+      TURN_BARGE_IN_RMS_THRESHOLD: "${TURN_BARGE_IN_RMS_THRESHOLD:-0.018}"
+      TURN_BARGE_IN_MIN_VOICE_FRAMES: "${TURN_BARGE_IN_MIN_VOICE_FRAMES:-2}"
+      TURN_INTERRUPTION_RECOVERY_TIMEOUT_SECONDS: "${TURN_INTERRUPTION_RECOVERY_TIMEOUT_SECONDS:-2.5}"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./docs/密钥:/app/docs/密钥:ro
+    command:
+      - "sh"
+      - "-c"
+      - "alembic -c backend/alembic.ini upgrade head && uvicorn backend.app.main:app --host 0.0.0.0 --port 8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      livekit:
+        condition: service_started
+
+  voice-worker:
+    profiles:
+      - "external-worker"
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file:
+      - .env.example
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: "postgresql+psycopg://customer_agent:customer_agent@postgres:5432/customer_agent"
+      REDIS_URL: "redis://redis:6379/0"
+      LIVEKIT_URL: "ws://livekit:7880"
+      PUBLIC_LIVEKIT_URL: "${PUBLIC_LIVEKIT_URL:-ws://127.0.0.1:7880}"
+      VOICE_WORKER_LAUNCH_MODE: "external"
+      VOICE_WORKER_ID: "compose-worker-1"
+      TURN_BARGE_IN_RMS_THRESHOLD: "${TURN_BARGE_IN_RMS_THRESHOLD:-0.018}"
+      TURN_BARGE_IN_MIN_VOICE_FRAMES: "${TURN_BARGE_IN_MIN_VOICE_FRAMES:-2}"
+      TURN_INTERRUPTION_RECOVERY_TIMEOUT_SECONDS: "${TURN_INTERRUPTION_RECOVERY_TIMEOUT_SECONDS:-2.5}"
+    volumes:
+      - ./docs/密钥:/app/docs/密钥:ro
+    command:
+      - "python"
+      - "-m"
+      - "backend.app.worker.voice_worker_runner"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      livekit:
+        condition: service_started
+volumes:
+  postgres_data:

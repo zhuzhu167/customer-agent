@@ -1,0 +1,31 @@
+{
+  "name": "baiying-web-voice-agent-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "typecheck": "vue-tsc --build --force",
+    "build": "vue-tsc --build --force && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "smoke:web-voice": "node scripts/web-voice-smoke.mjs",
+    "acceptance:manual-mic": "node scripts/manual-mic-acceptance.mjs"
+  },
+  "dependencies": {
+    "@lucide/vue": "^1.21.0",
+    "livekit-client": "^2.8.1",
+    "pinia": "^2.2.6",
+    "three": "^0.184.0",
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.0",
+    "@types/node": "^26.0.0",
+    "@types/three": "^0.184.1",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "@vue/tsconfig": "^0.7.0",
+    "typescript": "^5.6.3",
+    "vite": "^6.0.3",
+    "vue-tsc": "^2.1.10"
+  }
+}
